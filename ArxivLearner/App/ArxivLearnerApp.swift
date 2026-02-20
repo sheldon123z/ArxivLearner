@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct ArxivLearnerApp: App {
@@ -6,5 +7,6 @@ struct ArxivLearnerApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [Paper.self, ChatMessage.self])
     }
 }
