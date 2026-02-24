@@ -20,6 +20,17 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.arxivlearner.app
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    entitlements:
+      path: ArxivLearner/ArxivLearner.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.arxivlearner.app
+        com.apple.developer.icloud-services:
+          - CloudDocuments
+          - CloudKit
+        com.apple.developer.ubiquity-container-identifiers:
+          - iCloud.com.arxivlearner.app
+        aps-environment: development
     info:
       path: ArxivLearner/Info.plist
       properties:
@@ -27,6 +38,12 @@ targets:
         UILaunchScreen: {}
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        UIBackgroundModes:
+          - fetch
+          - remote-notification
+          - processing
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.arxivlearner.refresh
   ArxivLearnerTests:
     type: bundle.unit-test
     platform: iOS
@@ -37,3 +54,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.arxivlearner.tests
+        GENERATE_INFOPLIST_FILE: YES
+  ArxivLearnerUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: ArxivLearnerUITests
+    dependencies:
+      - target: ArxivLearner
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.arxivlearner.uitests
+        GENERATE_INFOPLIST_FILE: YES

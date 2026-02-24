@@ -17,6 +17,14 @@ struct FullCardView: View {
     @State private var downloadProgress: Double = 0
     @State private var insightVM = InsightViewModel()
 
+    // MARK: Sheet / Navigation Presentation State
+
+    @State private var showInnovationAnalysis = false
+    @State private var showFormulaAnalysis = false
+    @State private var showChat = false
+    @State private var showTranslation = false
+    @State private var showPaperDetail = false
+
     // MARK: Body
 
     var body: some View {
@@ -44,8 +52,31 @@ struct FullCardView: View {
         .onAppear { loadFavoriteState() }
         .sheet(isPresented: $showPDFReader) {
             if let url = pdfLocalURL {
-                PDFReaderView(title: paper.title, pdfURL: url)
+                let swiftDataPaper = getOrCreatePaper()
+                PDFReaderView(title: paper.title, pdfURL: url, paper: swiftDataPaper)
+                    .environment(\.modelContext, modelContext)
             }
+        }
+        .sheet(isPresented: $showInnovationAnalysis) {
+            let swiftDataPaper = getOrCreatePaper()
+            InnovationAnalysisView(paper: swiftDataPaper)
+        }
+        .sheet(isPresented: $showFormulaAnalysis) {
+            let swiftDataPaper = getOrCreatePaper()
+            FormulaAnalysisView(paper: swiftDataPaper)
+        }
+        .fullScreenCover(isPresented: $showChat) {
+            let swiftDataPaper = getOrCreatePaper()
+            ChatView(paper: swiftDataPaper)
+                .environment(\.modelContext, modelContext)
+        }
+        .fullScreenCover(isPresented: $showTranslation) {
+            let swiftDataPaper = getOrCreatePaper()
+            TranslationView(paper: swiftDataPaper)
+        }
+        .fullScreenCover(isPresented: $showPaperDetail) {
+            let swiftDataPaper = getOrCreatePaper()
+            PaperDetailView(paper: swiftDataPaper, modelContext: modelContext)
         }
     }
 
@@ -168,27 +199,35 @@ struct FullCardView: View {
             }
             .frame(maxHeight: .infinity)
 
-            // 6 action buttons in 3 rows of 2
+            // 6 action buttons in 3 rows of 2 (5.7: all shown; TODO: filter by model capability)
             VStack(spacing: 10) {
                 HStack(spacing: 10) {
-                    actionButton(icon: "lightbulb", label: "创新点") {
-                        // Innovation points - placeholder
+                    if isFeatureAvailable(.innovationAnalysis) {
+                        actionButton(icon: "lightbulb", label: "创新点") {
+                            showInnovationAnalysis = true
+                        }
                     }
-                    actionButton(icon: "function", label: "公式解析") {
-                        // Formula parsing - placeholder
+                    if isFeatureAvailable(.formulaAnalysis) {
+                        actionButton(icon: "function", label: "公式解析") {
+                            showFormulaAnalysis = true
+                        }
                     }
                 }
                 HStack(spacing: 10) {
-                    actionButton(icon: "bubble.left.and.bubble.right", label: "论文问答") {
-                        // Paper Q&A - placeholder
+                    if isFeatureAvailable(.chat) {
+                        actionButton(icon: "bubble.left.and.bubble.right", label: "论文问答") {
+                            showChat = true
+                        }
                     }
-                    actionButton(icon: "character.book.closed", label: "全文翻译") {
-                        // Full translation - placeholder
+                    if isFeatureAvailable(.translation) {
+                        actionButton(icon: "character.book.closed", label: "全文翻译") {
+                            showTranslation = true
+                        }
                     }
                 }
                 HStack(spacing: 10) {
                     actionButton(icon: "doc.richtext", label: "展开全文") {
-                        downloadAndOpenPDF()
+                        showPaperDetail = true
                     }
                     actionButton(icon: "arrow.clockwise", label: "重新生成") {
                         regenerateInsight()
@@ -325,7 +364,7 @@ struct FullCardView: View {
 
         insightVM.configure(config: config)
 
-        Task {
+        Task { @MainActor in
             await insightVM.generateInsight(for: swiftDataPaper)
             try? modelContext.save()
         }
@@ -342,7 +381,7 @@ struct FullCardView: View {
 
         insightVM.configure(config: config)
 
-        Task {
+        Task { @MainActor in
             await insightVM.regenerate(for: swiftDataPaper)
             try? modelContext.save()
         }
@@ -388,5 +427,33 @@ struct FullCardView: View {
         let swiftDataPaper = getOrCreatePaper()
         swiftDataPaper.isFavorite = isFavorite
         try? modelContext.save()
+    }
+
+    // MARK: - 5.7: Dynamic Capability-Based Button Visibility
+
+    /// Feature flags checked before showing each back-side action button.
+    /// Currently all features are available for any OpenAI-compatible text model.
+    ///
+    /// TODO: In a future release, inspect the configured model's capability metadata
+    /// (e.g. vision, function-calling, context-window size) from LLMProviderRegistry
+    /// and hide buttons whose requirements are not met. For example, formula rendering
+    /// could require a model with vision capability, or translation could require a
+    /// minimum context window to handle long markdown content.
+    enum CardFeature {
+        case innovationAnalysis
+        case formulaAnalysis
+        case chat
+        case translation
+    }
+
+    private func isFeatureAvailable(_ feature: CardFeature) -> Bool {
+        // All text features are supported by any OpenAI-compatible API endpoint.
+        // TODO: Check model capabilities from LLMProviderConfig / LLMProviderRegistry.
+        switch feature {
+        case .innovationAnalysis: return true
+        case .formulaAnalysis:   return true
+        case .chat:              return true
+        case .translation:       return true
+        }
     }
 }

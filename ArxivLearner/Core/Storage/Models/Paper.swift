@@ -37,8 +37,34 @@ final class Paper {
         set { markdownConvertStatus = newValue.rawValue }
     }
 
+    // Phase 3: browsing state
+    var viewedAt: Date?
+    var iCloudSyncEnabled: Bool
+
     @Relationship(deleteRule: .cascade, inverse: \ChatMessage.paper)
     var chatMessages: [ChatMessage] = []
+
+    @Relationship
+    var tagItems: [Tag] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \Annotation.paper)
+    var annotations: [Annotation] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \ReadingSession.paper)
+    var readingSessions: [ReadingSession] = []
+
+    /// Convert to ArxivPaperDTO for views that expect the DTO type.
+    var toDTO: ArxivPaperDTO {
+        ArxivPaperDTO(
+            arxivId: arxivId,
+            title: title,
+            authors: authors,
+            abstractText: abstractText,
+            categories: categories,
+            publishedDate: publishedDate,
+            pdfURL: URL(string: pdfURL) ?? URL(string: "https://arxiv.org/pdf/\(arxivId)")!
+        )
+    }
 
     init(
         arxivId: String,
@@ -56,7 +82,9 @@ final class Paper {
         markdownContent: String? = nil,
         markdownConvertStatus: ConvertStatus = .none,
         markdownConvertedAt: Date? = nil,
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        viewedAt: Date? = nil,
+        iCloudSyncEnabled: Bool = false
     ) {
         self.arxivId = arxivId
         self.title = title
@@ -74,5 +102,7 @@ final class Paper {
         self.markdownConvertStatus = markdownConvertStatus.rawValue
         self.markdownConvertedAt = markdownConvertedAt
         self.createdAt = createdAt
+        self.viewedAt = viewedAt
+        self.iCloudSyncEnabled = iCloudSyncEnabled
     }
 }

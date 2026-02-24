@@ -1,6 +1,8 @@
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var selectedTab = 0
 
     var body: some View {
@@ -17,31 +19,45 @@ struct ContentView: View {
                 }
                 .tag(1)
 
-            // Chat placeholder for MVP
-            NavigationStack {
-                ContentUnavailableView(
-                    "即将推出",
-                    systemImage: "bubble.left.and.bubble.right",
-                    description: Text("论文对话功能将在下一版本推出")
-                )
-                .navigationTitle("对话")
-            }
-            .tabItem {
-                Label("对话", systemImage: "bubble.left")
-            }
-            .tag(2)
+            ChatHistoryView()
+                .tabItem {
+                    Label("对话", systemImage: "bubble.left")
+                }
+                .tag(2)
+
+            ReadingStatsView()
+                .tabItem {
+                    Label("统计", systemImage: "chart.bar")
+                }
+                .tag(3)
 
             SettingsView()
                 .tabItem {
                     Label("设置", systemImage: "gearshape")
                 }
-                .tag(3)
+                .tag(4)
         }
         .tint(AppTheme.primary)
+        .preferredColorScheme(AppearanceManager.shared.colorScheme)
+        .onAppear {
+            DefaultPromptsLoader.loadIfNeeded(context: modelContext)
+        }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Paper.self, ChatMessage.self], inMemory: true)
+        .modelContainer(for: [
+            Paper.self,
+            ChatMessage.self,
+            LLMProvider.self,
+            LLMModel.self,
+            PromptTemplate.self,
+            UsageRecord.self,
+            Tag.self,
+            SearchHistory.self,
+            SavedSearch.self,
+            Annotation.self,
+            ReadingSession.self,
+        ], inMemory: true)
 }

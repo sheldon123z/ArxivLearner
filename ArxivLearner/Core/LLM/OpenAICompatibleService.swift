@@ -2,13 +2,15 @@ import Foundation
 
 // MARK: - LLMError
 
-enum LLMError: Error, LocalizedError {
+enum LLMError: Error, LocalizedError, Equatable {
     /// The server returned a non-2xx HTTP status code.
     case badResponse(statusCode: Int)
     /// The base URL in the provider config could not be parsed into a valid URL.
     case invalidURL
     /// The response body could not be decoded into the expected structure.
     case invalidResponse
+    /// No API key was found for the given keychain reference.
+    case missingAPIKey(ref: String)
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +20,8 @@ enum LLMError: Error, LocalizedError {
             return "The LLM provider base URL is invalid."
         case .invalidResponse:
             return "The LLM service response could not be decoded."
+        case .missingAPIKey(let ref):
+            return "No API key found in Keychain for reference '\(ref)'."
         }
     }
 }
@@ -61,21 +65,52 @@ private struct ChatStreamChunk: Decodable {
 
 // MARK: - OpenAICompatibleService
 
+/// Implements `LLMServiceProtocol` for any OpenAI-compatible Chat Completions endpoint.
+///
+/// This covers OpenAI, DeepSeek, OpenRouter, ZhiPu, DashScope, Minimax, and any
+/// provider that adheres to the `/v1/chat/completions` request/response shape.
+///
+/// Custom HTTP headers (e.g. `HTTP-Referer` required by OpenRouter) can be injected
+/// via the `customHeaders` parameter.
 final class OpenAICompatibleService: LLMServiceProtocol {
 
     // MARK: Properties
 
-    private let config: LLMProviderConfig
+    private let baseURL: String
+    private let apiKey: String
+    private let modelId: String
+    private let customHeaders: [String: String]
     private let session: URLSession
 
     // MARK: Init
 
-    init(config: LLMProviderConfig, session: URLSession = .shared) {
-        self.config = config
+    /// Designated initialiser — provide all fields directly.
+    init(
+        baseURL: String,
+        apiKey: String,
+        modelId: String,
+        customHeaders: [String: String] = [:],
+        session: URLSession = .shared
+    ) {
+        self.baseURL = baseURL
+        self.apiKey = apiKey
+        self.modelId = modelId
+        self.customHeaders = customHeaders
         self.session = session
     }
 
-    // MARK: Public API
+    /// Convenience initialiser from a legacy `LLMProviderConfig`.
+    /// Retained for backward compatibility with existing call-sites.
+    convenience init(config: LLMProviderConfig, session: URLSession = .shared) {
+        self.init(
+            baseURL: config.baseURL,
+            apiKey: config.apiKey,
+            modelId: config.modelId,
+            session: session
+        )
+    }
+
+    // MARK: LLMServiceProtocol
 
     func complete(messages: [LLMMessage], stream: Bool) async throws -> String {
         if stream {
@@ -131,7 +166,7 @@ final class OpenAICompatibleService: LLMServiceProtocol {
 
     /// Builds the URLRequest for the Chat Completions endpoint.
     func buildRequest(messages: [LLMMessage], stream: Bool) throws -> URLRequest {
-        let endpointString = config.baseURL.trimmingCharacters(in: .init(charactersIn: "/"))
+        let endpointString = baseURL.trimmingCharacters(in: .init(charactersIn: "/"))
             + "/chat/completions"
         guard let url = URL(string: endpointString) else {
             throw LLMError.invalidURL
@@ -140,9 +175,14 @@ final class OpenAICompatibleService: LLMServiceProtocol {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
-        let body = ChatRequest(model: config.modelId, messages: messages, stream: stream)
+        // Apply any provider-specific custom headers (e.g. OpenRouter's HTTP-Referer).
+        for (key, value) in customHeaders {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+
+        let body = ChatRequest(model: modelId, messages: messages, stream: stream)
         request.httpBody = try JSONEncoder().encode(body)
         return request
     }

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftData
 
 // MARK: - SearchViewModel
 
@@ -56,7 +57,7 @@ final class SearchViewModel {
 
     /// Performs a new search, replacing any existing results.
     @MainActor
-    func search() async {
+    func search(modelContext: ModelContext? = nil) async {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else { return }
 
@@ -77,6 +78,11 @@ final class SearchViewModel {
             let results = try await apiService.search(params: params)
             papers = results
             hasMoreResults = results.count >= pageSize
+
+            // 保存搜索历史
+            if let ctx = modelContext {
+                saveSearchHistory(query: trimmedQuery, modelContext: ctx)
+            }
         } catch {
             errorMessage = error.localizedDescription
             papers = []
@@ -117,5 +123,52 @@ final class SearchViewModel {
         }
 
         isLoading = false
+    }
+
+    // MARK: - Search History
+
+    private func saveSearchHistory(query: String, modelContext: ModelContext) {
+        // 避免重复保存相同查询（检查最近的历史）
+        let descriptor = FetchDescriptor<SearchHistory>(
+            predicate: #Predicate { $0.query == query },
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            // 如果同一查询在5分钟内已存在，不重复保存
+            if Date.now.timeIntervalSince(existing.timestamp) < 300 {
+                return
+            }
+        }
+
+        let history = SearchHistory(
+            query: query,
+            filterCategory: selectedCategory,
+            timestamp: .now
+        )
+        modelContext.insert(history)
+        try? modelContext.save()
+    }
+
+    // MARK: - Recommended Topics
+
+    /// 从搜索历史中提取高频关键词，返回前 N 个推荐主题
+    func extractRecommendedTopics(from histories: [SearchHistory], limit: Int = 8) -> [String] {
+        var wordCount: [String: Int] = [:]
+        let stopWords: Set<String> = ["the", "a", "an", "and", "or", "in", "of", "for", "to", "with", "on"]
+
+        for history in histories {
+            let words = history.query
+                .lowercased()
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { $0.count >= 3 && !stopWords.contains($0) }
+            for word in words {
+                wordCount[word, default: 0] += 1
+            }
+        }
+
+        return wordCount
+            .sorted { $0.value > $1.value }
+            .prefix(limit)
+            .map { $0.key }
     }
 }

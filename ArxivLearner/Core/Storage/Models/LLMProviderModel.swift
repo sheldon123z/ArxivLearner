@@ -5,17 +5,20 @@ import Foundation
 // Stored via UserDefaults or a JSON file rather than the SwiftData store for MVP simplicity.
 
 struct LLMProviderConfig: Codable, Equatable {
+    var providerId: String?
     var name: String
     var baseURL: String
     var apiKey: String
     var modelId: String
 
     init(
+        providerId: String? = nil,
         name: String = "",
         baseURL: String = "",
         apiKey: String = "",
         modelId: String = ""
     ) {
+        self.providerId = providerId
         self.name = name
         self.baseURL = baseURL
         self.apiKey = apiKey

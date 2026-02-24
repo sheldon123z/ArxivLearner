@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 
+@MainActor
 @Observable
 final class InsightViewModel {
     var insight: String = ""
@@ -39,8 +40,22 @@ final class InsightViewModel {
             for try await chunk in service.completeStream(messages: messages) {
                 insight += chunk
             }
-            // Save to paper
             paper.llmInsight = insight
+        } catch let error as LLMError {
+            switch error {
+            case .invalidURL:
+                errorMessage = "LLM 服务 URL 无效，请在设置中检查"
+            case .badResponse(let code):
+                if code == 401 {
+                    errorMessage = "API Key 无效，请在设置中检查"
+                } else {
+                    errorMessage = "LLM 服务错误 (HTTP \(code))"
+                }
+            case .invalidResponse:
+                errorMessage = "LLM 响应格式异常"
+            case .missingAPIKey:
+                errorMessage = "API Key 未配置，请在设置中添加"
+            }
         } catch {
             errorMessage = "生成失败: \(error.localizedDescription)"
         }
